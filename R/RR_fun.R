@@ -1,3 +1,4 @@
+
 #' RR function to calculate the relative risk
 #'
 #' @param date # date (days in Date format)
@@ -27,7 +28,6 @@ RR_fun <- function(date, temp, deaths, year_eval, temp_dec = 0.1, ci_level = 0.9
                     levels = c("Monday","Tuesday","Wednesday","Thursday",
                                "Friday","Saturday","Sunday"))
     )
-
 
 
   # crossbasis setup --------------------------------------------------------
@@ -69,7 +69,6 @@ RR_fun <- function(date, temp, deaths, year_eval, temp_dec = 0.1, ci_level = 0.9
   # summary(model)
 
 
-
   # minimum mortality temperature (MMT) -------------------------------------
 
   # prediction (with median temperature as centering value)
@@ -105,7 +104,7 @@ RR_fun <- function(date, temp, deaths, year_eval, temp_dec = 0.1, ci_level = 0.9
   dat$RR <- approx(pred$predvar, pred$allRRfit, xout = dat$temp)$y
   dat$RR_low  <- approx(pred$predvar, pred$allRRlow,  xout = dat$temp)$y
   dat$RR_high <- approx(pred$predvar, pred$allRRhigh, xout = dat$temp)$y
-
+  dat$RR_se <- approx(pred$predvar, pred$allse, xout = dat$temp)$y
 
 
   # output ------------------------------------------------------------------
@@ -113,11 +112,10 @@ RR_fun <- function(date, temp, deaths, year_eval, temp_dec = 0.1, ci_level = 0.9
   out <- dat |>
     mutate(period = paste0(min(dat$year), "-", max(dat$year)),
            year_pred = if_else(year == year_eval, 1, 0)) |>
-    select(year, date, temp, deaths, MMT, RR, RR_low, RR_high, period, year_pred)
+    select(year, date, temp, deaths, MMT,
+           RR, RR_low, RR_high, RR_se, period, year_pred)
 
   return(out)
 
 }
-
-
 

@@ -12,10 +12,11 @@ library(dlnm) # distributed lag non-linear models
 library(lubridate) # date, time
 library(mgcv) # flexible regressions
 library(patchwork) # multiple graphics
-library(renv) # reproducability
+library(renv) # reproducibility
 library(splines) # non-linear models
 library(styler) # code style
 library(tidyverse) # tidyverse
+library(truncnorm) # truncated normal distribution
 
 
 # functions
@@ -138,17 +139,72 @@ ggplot(RR_dat, aes(x = temp, y = RR)) +
   geom_hline(yintercept = 1) +
   geom_vline(aes(xintercept = MMT), linetype = "dotted") +
   labs(x = "mean daily temperature (°C)",
-       y = "realtive risk") +
+       y = "relative risk") +
   theme_minimal()
+
+
+
+# Monte Carlo (MC) simulation ----------------------------------------------
+
+# RR stats per period and temperature
+RR_stats <- RR_dat |>
+  group_by(period, temp) |>
+  summarize(RR_mean = mean(RR),
+            RR_sd = mean(RR_se),
+            RR_low = min(RR_low),
+            RR_high = max(RR_high),
+            .groups = "drop")
+
+# MC (approx. 3 seconds)
+t0 <- Sys.time()
+RR_mc <- RR_stats |>
+  mutate(sim = purrr::pmap(
+    list(RR_mean, RR_sd, RR_low, RR_high),
+    \(m, s, lo, hi) rtruncnorm(1000, lo, hi, m, s)
+  )) |>
+  unnest(sim)
+Sys.time() - t0
+
+# confidence interval
+RR_ci_mc <- RR_mc |>
+  group_by(period, temp) |>
+  summarize(
+    RR_low_mc  = quantile(sim, 0.025, na.rm = TRUE),
+    RR_high_mc = quantile(sim, 0.975, na.rm = TRUE),
+    .groups = "drop"
+  )
+
+# initial RR data with MC confidence interval
+RR_dat_mc <- RR_dat |>
+  left_join(RR_ci_mc, by = c("period", "temp"))
+
+# check
+nrow(RR_dat)
+nrow(RR_dat_mc)
+
+
+# exposure-response relationship with MC confidence interval --------------
+
+ggplot(RR_dat_mc, aes(x = temp, y = RR)) +
+  geom_ribbon(aes(ymin = RR_low_mc, ymax = RR_high_mc), alpha = 0.2) +
+  geom_line(linewidth = 1) +
+  facet_wrap(~ period) +
+  geom_hline(yintercept = 1) +
+  geom_vline(aes(xintercept = MMT), linetype = "dotted") +
+  labs(x = "mean daily temperature (°C)",
+       y = "relative risk") +
+  theme_minimal()
+
+
 
 
 # attributable fraction and attributable deaths ---------------------------
 
-AF_AD <- RR_dat |>
+AF_AD <- RR_dat_mc |>
   filter(year_pred == 1) |>
   mutate(AF = pmax(0, if_else(temp > MMT, (RR - 1) / RR, 0)),
-         AF_low = pmax(0, if_else(temp > MMT, (RR_low - 1) / RR_low, 0)),
-         AF_high = pmax(0, if_else(temp > MMT, (RR_high - 1) / RR_high, 0)),
+         AF_low = pmax(0, if_else(temp > MMT, (RR_low_mc - 1) / RR_low_mc, 0)),
+         AF_high = pmax(0, if_else(temp > MMT, (RR_high_mc - 1) / RR_high_mc, 0)),
          AD = AF * deaths,
          AD_low = AF_low * deaths,
          AD_high = AF_high * deaths)
