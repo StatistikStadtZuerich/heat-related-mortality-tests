@@ -1,0 +1,22 @@
+project:
+  type: book
+
+execute:
+  cache: false
+
+book:
+  title: "Heat-Related Mortality"
+  author: "sszrok"
+  date: today
+  date-format: "23 Jun 2026"
+  chapters:
+    - index.qmd
+    - mortality.qmd
+
+format:
+  html:
+    style: ssz.css
+    toc: true
+    toc-depth: 3
+
+

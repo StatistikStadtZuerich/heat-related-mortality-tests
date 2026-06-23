@@ -1,0 +1,629 @@
+
+# Heat-Related Mortality
+
+## Preparation
+
+### Packages
+
+```{r}
+#| echo: true
+#| results: false
+#| warning: false
+#| message: false
+
+library(dlnm) # distributed lag non-linear models
+library(lubridate) # date, time
+library(mgcv) # flexible regressions
+library(patchwork) # multiple graphics
+library(renv) # R environment
+library(rprojroot) # RProjekt root finden
+library(splines) # non-linear models
+library(tidyverse) # tidyverse
+
+```
+
+
+### Paths
+
+```{r}
+#| echo: true
+#| results: false
+#| warning: false
+#| message: false
+
+# project root
+root <- find_root(is_rstudio_project)
+
+# deaths: city of Zurich
+path_death_zh <- "https://data.stadt-zuerich.ch/dataset/bev_tag_todesfaelle_quartier_geschl_ag_herkunft_od4211/download/BEV421OD4211.csv"
+
+# deaths: FSO
+path_death_fso <- file.path(root, "data/deaths-FSO.csv")
+
+# file from Swiss Stats Explorer:
+
+# https://dv.stats.swiss?chartId=25456e79-3ef6-4562-b23a-dad3cd67c139
+
+# https://stats.swiss/vis?lc=de&fs[0]=Erhebung%252C%20Statistik%2C0%7CStatistik%20der%20nat%C3%BCrlichen%20Bev%C3%B6lkerungsbewegung%23BEVNAT%23&pg=10&fc=Erhebung%2C%20Statistik&bp=true&snb=19&df[ds]=ds%3Adisseminate&df[id]=DF_BEVNAT_EVENEMENTS_1&df[ag]=CH1.BEVNAT&df[vs]=1.0.0&dq=4.8100._T.D&to[TIME_PERIOD]=true&pd=1969-01-01%2C2025-12-31&vw=tb
+
+
+
+# daily temperature at SMA Zurich (harmonized time series)
+path_temp <- "https://data.geo.admin.ch/ch.meteoschweiz.ogd-nbcn/sma/ogd-nbcn_sma_d_historical.csv"
+
+
+
+```
+
+
+### Functions
+
+```{r}
+#| echo: true
+#| results: false
+#| warning: false
+#| message: false
+
+source(file.path(root, "R/RR_fun.R"))
+
+```
+
+
+### Parameter
+
+```{r}
+
+# last year with both Zurich and FSO data
+# (complete year: January to December)
+
+last_year <- 2025
+
+```
+
+
+
+### Graphics
+
+```{r}
+#| echo: true
+#| results: false
+#| warning: false
+#| message: false
+
+# colors
+# https://github.com/StatistikStadtZuerich/zuericolors/blob/main/R/palettes.R
+
+qual12 <- c("#3431DE", "#0A8DF6", "#23C3F1", "#7B4FB7", "#DB247D", "#FB737E",
+            "#007C78", "#1F9E31", "#99C32E", "#9A5B01", "#FF720C", "#FBB900")
+
+
+```
+
+
+Grafiken mit Zoom-Funktionalität.
+
+```{=html}
+#| echo: true
+#| results: false
+#| warning: false
+#| message: false
+
+<script src = "https://ajax.googleapis.com/ajax/libs/jquery/3.4.1/jquery.min.js""></script>
+<script type="text/javascript">
+  $(document).ready(function() {
+    $('body').prepend('<div class=\"zoomDiv\"><img src=\"\" class=\"zoomImg\"></div>');
+    // onClick function for all plots (img's)
+    $('img:not(.zoomImg)').click(function() {
+      $('.zoomImg').attr('src', $(this).attr('src')).css({width: '100%'});
+      $('.zoomDiv').css({opacity: '1', width: 'auto', border: '1px solid white', borderRadius: '5px', position: 'fixed', top: '50%', left: '50%', marginRight: '-50%', transform: 'translate(-50%, -50%)', boxShadow: '0px 0px 50px #888888', zIndex: '50', overflow: 'auto', maxHeight: '100%'});
+    });
+    // onClick function for zoomImg
+    $('img.zoomImg').click(function() {
+      $('.zoomDiv').css({opacity: '0', width: '0%'});
+    });
+  });
+</script>
+```
+
+
+
+## Import
+
+
+### Deaths: FSO
+
+```{r}
+
+# import deaths
+dea_imp <- read_csv(path_death_fso) |> 
+  rename(date = TIME_PERIOD, deaths = OBS_VALUE) |> 
+  select(date, deaths)
+
+# duplicates? no
+dea_imp |> 
+  count(date) |> 
+  filter(n == max(n))
+
+# deaths for all days from May to September
+dea <- tibble(date = seq(min(dea_imp$date), max(dea_imp$date), by = "day")) |> 
+  left_join(dea_imp, by = "date") |> 
+  mutate(deaths = replace_na(deaths, 0),
+         month = month(date)) |>
+  filter(month >= 5, month <= 9) |>
+  select(date, month, deaths)
+
+
+```
+
+First plot of FSO death data
+
+
+```{r}
+#| label: fig-01
+#| fig-cap: "deaths per day (FSO)"
+#| fig-width: 6
+#| fig-height: 4
+#| echo: false
+#| message: false
+#| warning: false
+
+dea |> 
+  ggplot() +
+  geom_line(aes(x = date, y = deaths)) +
+  facet_wrap(~as.factor(month), nrow = 1)
+
+```
+
+### Deaths: Zurich
+
+```{r}
+
+# import deaths
+dea_imp_zh <- read_csv(path_death_zh) |> 
+    mutate(date = as.Date(GueltigAbDat)) |> 
+    group_by(date) |>
+    summarise(deaths = sum(AnzSterWir, na.rm = TRUE), .groups = "drop")
+
+# duplicates? no
+dea_imp_zh |> 
+  count(date) |> 
+  filter(n == max(n))
+
+# deaths for all days from May to September
+dea_zh <- tibble(date = seq(min(dea_imp_zh$date), max(dea_imp_zh$date), by = "day")) |> 
+  left_join(dea_imp_zh, by = "date") |> 
+  mutate(deaths = replace_na(deaths, 0),
+         month = month(date)) |>
+  filter(month >= 5, month <= 9) |>
+  select(date, month, deaths)
+
+
+```
+
+```{r}
+#| label: fig-02
+#| fig-cap: "deaths per day (Zurich)"
+#| fig-width: 6
+#| fig-height: 4
+#| echo: false
+#| message: false
+#| warning: false
+
+dea_zh |> 
+  ggplot() +
+  geom_line(aes(x = date, y = deaths)) +
+  facet_wrap(~as.factor(month), nrow = 1)
+
+```
+
+
+### Temperature
+
+```{r}
+
+# import mean daily temperature
+tem <- read_delim(path_temp, delim = ";") |>
+  mutate(date = as.Date(reference_timestamp, format = "%d.%m.%Y %H:%M")) |>
+  rename(temp = ths200d0) |>
+  select(date, temp)
+
+# checks
+tem |>
+  mutate(diff = c(1, diff(date))) |>
+  summarize(min_date_diff = min(diff),
+            max_date_diff = max(diff),
+            temp_NA = sum(is.na(temp)))
+
+
+```
+
+First plot for temperature data
+
+
+```{r}
+#| label: fig-03
+#| fig-cap: "mean temperature per day"
+#| fig-width: 6
+#| fig-height: 4
+#| echo: false
+#| message: false
+#| warning: false
+
+tem |> 
+  mutate(month = month(date)) |>
+  filter(month >= 5, month <= 9) |> 
+  ggplot() +
+  geom_line(aes(x = date, y = temp)) +
+  facet_wrap(~as.factor(month), nrow = 1)
+
+
+```
+
+
+
+
+### FSO-Death and temperature combined
+
+
+```{r}
+
+# data is limited by death values available
+range(dea$date)
+range(tem$date)
+
+# imported data
+total <- dea |>
+  left_join(tem, by = "date")
+
+# check
+nrow(dea)
+nrow(total)
+
+
+
+```
+
+## Analysis
+
+### Relative risk (RR)
+
+Relative risk estimation with FSO death data.
+
+```{r}
+
+# years (only if ten years with past data available)
+years <- (year(min(total$date))+9) : year(max(total$date))
+
+# data: relative risk
+RR_dat <- map_dfr(years, function(y) {
+  RR_fun(
+    date = total$date,
+    temp = total$temp,
+    death = total$deaths,
+    year_eval = y
+  )
+})
+
+```
+
+
+### Exposure-response relationship
+
+Exposure-response relationship with FSO death data.
+
+```{r}
+#| label: fig-04
+#| fig-cap: "exposure-response relationship"
+#| fig-width: 15
+#| fig-height: 12
+#| echo: false
+#| message: false
+#| warning: false
+
+ggplot(RR_dat, aes(x = temp, y = RR)) +
+  geom_ribbon(aes(ymin = RR_low, ymax = RR_high), alpha = 0.2) +
+  geom_line(linewidth = 1) +
+  facet_wrap(~ period) +
+  geom_hline(yintercept = 1) +
+  geom_vline(aes(xintercept = MMT), linetype = "dotted") +
+  labs(x = "mean daily temperature (°C)",
+       y = "realtive risk") +
+  theme_minimal()
+
+
+```
+
+### Attributable fraction
+
+Attributable fraction with FSO death data.
+
+```{r}
+
+AF <- RR_dat |>
+  filter(year_pred == 1) |>
+  mutate(AF = pmax(0, if_else(temp > MMT, (RR - 1) / RR, 0)),
+         AF_low = pmax(0, if_else(temp > MMT, (RR_low - 1) / RR_low, 0)),
+         AF_high = pmax(0, if_else(temp > MMT, (RR_high - 1) / RR_high, 0)))
+         
+
+
+```
+
+Cumulative distribution of the attributable fraction
+
+```{r}
+#| label: fig-05
+#| fig-cap: "Cumulative distribution of attributable fraction"
+#| fig-width: 6
+#| fig-height: 4
+#| echo: false
+#| message: false
+#| warning: false
+
+ggplot(AF, aes(x = AF)) +
+  stat_ecdf(linewidth = 0.6) +
+  labs(x = "attributable fraction", y = "F(x)") +
+  theme_minimal()
+
+
+```
+
+
+
+
+```{r}
+#| label: fig-06
+#| fig-cap: "Cumulative distribution of attributable fraction by period"
+#| fig-width: 10
+#| fig-height: 5
+#| echo: false
+#| message: false
+#| warning: false
+
+ggplot(AF, aes(x = AF, col = period)) +
+  stat_ecdf(linewidth = 0.3) +
+  labs(x = "attributable fraction", y = "F(x)", col = "") +
+  theme_minimal()
+
+
+```
+
+
+
+### Attributable deaths
+
+Attributable deaths with Zurich death data.
+
+Zurich death data begins later than the estimated AF; 
+therefore, right join on Zurich death data.
+
+
+```{r}
+
+AD <- AF |> 
+  select(year, date, temp, MMT, RR, RR_low, RR_high, period, 
+         AF, AF_low, AF_high) |> 
+  right_join(dea_zh, by = "date") |> 
+  mutate(AD = AF * deaths,
+         AD_low = AF_low * deaths,
+         AD_high = AF_high * deaths) |> 
+  filter(year <= last_year)
+
+
+```
+
+
+## Results
+
+### Heat-related mortality by year
+
+Heat-related mortality in the city of Zurich by year.
+
+```{r}
+#| label: fig-07
+#| fig-cap: "heat-related mortality by year"
+#| fig-width: 8
+#| fig-height: 5
+#| echo: false
+#| message: false
+#| warning: false
+
+mort_y <- AD |>
+  group_by(year) |>
+  summarise(across(c(deaths, AD, AD_low, AD_high),
+                   ~ sum(.x, na.rm = TRUE)),
+            .groups = "drop")
+
+ggplot(mort_y) +
+  geom_col(aes(x = factor(year), y = AD), fill = qual12[6]) +
+  geom_errorbar(aes(x = factor(year), ymin = AD_low, ymax = AD_high),
+                width = 0.2, col = "grey40") +
+  labs(x = "year", y = "heat-related deaths per year") +
+  theme_minimal()
+
+
+```
+
+### Proportion of heat related deaths (summer months)
+
+Proportion of heat related deaths from May to September per year (city of Zurich).
+
+```{r}
+#| label: fig-08
+#| fig-cap: "attributable fraction by year"
+#| fig-width: 8
+#| fig-height: 5
+#| echo: false
+#| message: false
+#| warning: false
+
+prop_y_summer <- mort_y |> 
+  mutate(percent = pmin(100, AD/deaths * 100),
+         percent_low = pmin(100, AD_low / deaths * 100),
+         percent_high = pmin(100, AD_high / deaths * 100))
+
+ggplot(prop_y_summer) +
+  geom_col(aes(x = factor(year), y = percent), fill = qual12[10]) +
+  geom_errorbar(aes(x = factor(year), ymin = percent_low, ymax = percent_high),
+                width = 0.2, col = "grey40") +
+  labs(x = "year", y = "proportion of heat-related deaths (in %)") +
+  theme_minimal()
+
+
+```
+
+### Proportion of heat related deaths (entire year)
+
+```{r}
+#| label: fig-09
+#| fig-cap: "proportion of heat related deaths (entire year)"
+#| fig-width: 8
+#| fig-height: 5
+#| echo: false
+#| message: false
+#| warning: false
+
+prop_y <- dea_imp_zh |>
+  mutate(year = year(date)) |>
+  filter(year >= min(mort_y$year), year <= last_year) |>
+  group_by(year) |>
+  summarize(total = sum(deaths), .groups = "drop") |>
+  left_join(mort_y, by = "year") |>
+  mutate(percent = pmin(100, AD / total * 100),
+         percent_low = pmin(100, AD_low  / total * 100),
+         percent_high = pmin(100, AD_high  / total * 100))
+
+ggplot(prop_y) +
+  geom_col(aes(x = factor(year), y = percent), fill = qual12[4]) +
+  geom_errorbar(aes(x = factor(year), ymin = percent_low, ymax = percent_high),
+                width = 0.2, col = "grey40") +
+  labs(x = "year", y = "proportion of heat-related deaths (in %)") +
+  theme_minimal()
+
+
+```
+
+
+
+
+
+### heat-related mortality by year and heat intensity
+
+In the city of Zurich.
+
+```{r}
+#| label: fig-10
+#| fig-cap: "heat-related mortality by year and heat intensity"
+#| fig-width: 8
+#| fig-height: 5
+#| echo: false
+#| message: false
+#| warning: false
+
+# temperature classes
+temp_classes <- c("moderate", "hot", "very hot")
+
+with_temp_classes <- AD |>
+  mutate(temp_class = factor(case_when(
+    temp < 25 ~ temp_classes[1],
+    (temp >= 25) & (temp < 27) ~ temp_classes[2],
+    temp >= 27 ~ temp_classes[3]),
+    levels = temp_classes)
+  )
+
+# mortality by year and temperature class
+mort_yt <- with_temp_classes |>
+  group_by(year, temp_class) |>
+  summarise(AD = sum(AD), .groups = "drop")
+
+ggplot() +
+  geom_col(data = mort_yt,
+           aes(x = factor(year), y = AD, fill = fct_rev(temp_class))) +
+  geom_errorbar(data = mort_y,
+                aes(x = factor(year), ymin = AD_low, ymax = AD_high),
+                width = 0.2, col = "grey40") +
+  scale_fill_manual(values = qual12[c(5, 11, 12)]) +
+  labs(x = "year", y = "heat-related deaths per year", fill = "") +
+  theme_minimal()
+
+
+
+```
+
+
+###  selected years (daily values)
+
+```{r}
+#| label: fig-11
+#| fig-cap: "selected years (daily values)"
+#| fig-width: 12
+#| fig-height: 10
+#| echo: false
+#| message: false
+#| warning: false
+
+
+# Why these years? high values (2015, 2018), and last year (2025)
+years_selected <- AD |>
+  filter(year %in% c(2015, 2018, 2025)) |>
+  mutate(plot_date = as.Date(paste0("2000-", format(date, "%m-%d"))))
+
+
+p1 <- ggplot(years_selected) +
+  geom_line(aes(x = plot_date, y = temp), col = qual12[1]) +
+  geom_line(aes(x = plot_date, y = MMT), col = qual12[1], linetype = "dashed") +
+  facet_wrap(~ factor(year)) +
+  labs(x = "", y = "mean daily temperature (°C)") +
+  theme_minimal()
+
+p2 <- ggplot(years_selected) +
+  geom_line(aes(x = plot_date, y = AD), col = qual12[5]) +
+  geom_ribbon(aes(x = plot_date, ymin = AD_low, ymax = AD_high),
+              fill = qual12[5], alpha = 0.2) +
+  facet_wrap(~ factor(year)) +
+  labs(x = "", y = "daily heat-related deaths") +
+  theme_minimal()
+
+p1 / p2
+
+
+```
+
+### MMT by year
+
+```{r}
+#| label: fig-12
+#| fig-cap: "minimum mortality temperature (MMT) by year"
+#| fig-width: 7
+#| fig-height: 5
+#| echo: false
+#| message: false
+#| warning: false
+
+MMT_y <- AD |>
+  group_by(year) |>
+  summarise(MMT = unique(MMT), .groups = "drop")
+
+ggplot(MMT_y) +
+  geom_col(aes(x = factor(year), y = MMT), fill = qual12[1]) +
+  labs(x = "year", y = "minimum mortality temperature") +
+  theme_minimal()
+
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+...

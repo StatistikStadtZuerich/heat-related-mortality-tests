@@ -14,7 +14,7 @@
 #' @examples
 RR_fun <- function(date, temp, deaths, year_eval, temp_dec = 0.1, ci_level = 0.95){
 
-  # data preparation (ten years, time trend, and seasonality) ---------------
+# data preparation (ten years, time trend, and seasonality) ---------------
 
   dat <- tibble(date = date,
                 temp = temp,
@@ -30,16 +30,16 @@ RR_fun <- function(date, temp, deaths, year_eval, temp_dec = 0.1, ci_level = 0.9
     )
 
 
-  # crossbasis setup --------------------------------------------------------
+# crossbasis setup --------------------------------------------------------
 
 
-  # temperature: quadratic B-spline with nodes at the 75th percentile
+# temperature: quadratic B-spline with nodes at the 75th percentile
   k_temp <- quantile(dat$temp, 0.75, na.rm = TRUE)
 
-  # lags: 7 days at 2 knots on a log scale
+# lags: 7 days at 2 knots on a log scale
   lag_knots <- logknots(7, nk = 2)
 
-  # crossbasis
+# crossbasis
   cb_temp <- crossbasis(
     dat$temp,
     lag = 7,
@@ -51,7 +51,7 @@ RR_fun <- function(date, temp, deaths, year_eval, temp_dec = 0.1, ci_level = 0.9
 
 
 
-  # Quasi-Poisson DLNM fitten -----------------------------------------------
+# Quasi-Poisson DLNM fitten -----------------------------------------------
 
 
   # including long-term trend and day of the week
@@ -69,25 +69,25 @@ RR_fun <- function(date, temp, deaths, year_eval, temp_dec = 0.1, ci_level = 0.9
   # summary(model)
 
 
-  # minimum mortality temperature (MMT) -------------------------------------
+# minimum mortality temperature (MMT) -------------------------------------
 
-  # prediction (with median temperature as centering value)
+# prediction (with median temperature as centering value)
 
-  pred0 <- crosspred(cb_temp,
-                     model,
-                     cen = median(dat$temp),
-                     by = temp_dec,
-                     ci.level = ci_level)
+pred0 <- crosspred(cb_temp,
+                   model,
+                   cen = median(dat$temp),
+                   by = temp_dec,
+                   ci.level = ci_level)
 
 
-  # reference temperature (temperature with minimal mortality risk)
+# reference temperature (temperature with minimal mortality risk)
   MMT <- pred0$predvar[which.min(pred0$allRRfit)[1]]
 
-  # MMT in output data
+# MMT in output data
   dat$MMT <- MMT
 
 
-  # prediction with MMT as centering value ----------------------------------
+# prediction with MMT as centering value ----------------------------------
 
   pred <- crosspred(
     cb_temp,
@@ -98,16 +98,16 @@ RR_fun <- function(date, temp, deaths, year_eval, temp_dec = 0.1, ci_level = 0.9
   )
 
 
-  # relative risk (RR) per day ----------------------------------------------
+# relative risk (RR) per day ----------------------------------------------
 
-  # approximate the nearest forecast value for each day
+# approximate the nearest forecast value for each day
   dat$RR <- approx(pred$predvar, pred$allRRfit, xout = dat$temp)$y
   dat$RR_low  <- approx(pred$predvar, pred$allRRlow,  xout = dat$temp)$y
   dat$RR_high <- approx(pred$predvar, pred$allRRhigh, xout = dat$temp)$y
   dat$RR_se <- approx(pred$predvar, pred$allse, xout = dat$temp)$y
 
 
-  # output ------------------------------------------------------------------
+# output ------------------------------------------------------------------
 
   out <- dat |>
     mutate(period = paste0(min(dat$year), "-", max(dat$year)),
