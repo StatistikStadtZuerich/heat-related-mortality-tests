@@ -1,0 +1,62 @@
+[
+  {
+    "objectID": "index.html",
+    "href": "index.html",
+    "title": "Heat-Related Mortality",
+    "section": "",
+    "text": "Chapters",
+    "crumbs": [
+      "Chapters"
+    ]
+  },
+  {
+    "objectID": "mortality.html",
+    "href": "mortality.html",
+    "title": "1  Heat-Related Mortality",
+    "section": "",
+    "text": "1.1 Preparation",
+    "crumbs": [
+      "<span class='chapter-number'>1</span>  <span class='chapter-title'>Heat-Related Mortality</span>"
+    ]
+  },
+  {
+    "objectID": "mortality.html#preparation",
+    "href": "mortality.html#preparation",
+    "title": "1  Heat-Related Mortality",
+    "section": "",
+    "text": "1.1.1 Packages\n\nlibrary(dlnm) # distributed lag non-linear models\nlibrary(lubridate) # date, time\nlibrary(mgcv) # flexible regressions\nlibrary(patchwork) # multiple graphics\nlibrary(renv) # R environment\nlibrary(rprojroot) # RProjekt root finden\nlibrary(splines) # non-linear models\nlibrary(tidyverse) # tidyverse\n\n\n\n1.1.2 Paths\n\n# project root\nroot &lt;- find_root(is_rstudio_project)\n\n# deaths: city of Zurich\npath_death_zh &lt;- \"https://data.stadt-zuerich.ch/dataset/bev_tag_todesfaelle_quartier_geschl_ag_herkunft_od4211/download/BEV421OD4211.csv\"\n\n# deaths: FSO\npath_death_fso &lt;- file.path(root, \"data/deaths-FSO.csv\")\n\n# file from Swiss Stats Explorer:\n\n# https://dv.stats.swiss?chartId=25456e79-3ef6-4562-b23a-dad3cd67c139\n\n# https://stats.swiss/vis?lc=de&fs[0]=Erhebung%252C%20Statistik%2C0%7CStatistik%20der%20nat%C3%BCrlichen%20Bev%C3%B6lkerungsbewegung%23BEVNAT%23&pg=10&fc=Erhebung%2C%20Statistik&bp=true&snb=19&df[ds]=ds%3Adisseminate&df[id]=DF_BEVNAT_EVENEMENTS_1&df[ag]=CH1.BEVNAT&df[vs]=1.0.0&dq=4.8100._T.D&to[TIME_PERIOD]=true&pd=1969-01-01%2C2025-12-31&vw=tb\n\n\n\n# daily temperature at SMA Zurich (harmonized time series)\npath_temp &lt;- \"https://data.geo.admin.ch/ch.meteoschweiz.ogd-nbcn/sma/ogd-nbcn_sma_d_historical.csv\"\n\n\n\n1.1.3 Functions\n\nsource(file.path(root, \"R/RR_fun.R\"))\n\n\n\n1.1.4 Parameter\n\n# last year with both Zurich and FSO data\n# (complete year: January to December)\n\nlast_year &lt;- 2025\n\n\n\n1.1.5 Graphics\n\n# colors\n# https://github.com/StatistikStadtZuerich/zuericolors/blob/main/R/palettes.R\n\nqual12 &lt;- c(\"#3431DE\", \"#0A8DF6\", \"#23C3F1\", \"#7B4FB7\", \"#DB247D\", \"#FB737E\",\n            \"#007C78\", \"#1F9E31\", \"#99C32E\", \"#9A5B01\", \"#FF720C\", \"#FBB900\")\n\nGrafiken mit Zoom-Funktionalität.\n#| echo: true\n#| results: false\n#| warning: false\n#| message: false",
+    "crumbs": [
+      "<span class='chapter-number'>1</span>  <span class='chapter-title'>Heat-Related Mortality</span>"
+    ]
+  },
+  {
+    "objectID": "mortality.html#import",
+    "href": "mortality.html#import",
+    "title": "1  Heat-Related Mortality",
+    "section": "1.2 Import",
+    "text": "1.2 Import\n\n1.2.1 Deaths: FSO\n\n# import deaths\ndea_imp &lt;- read_csv(path_death_fso) |&gt; \n  rename(date = TIME_PERIOD, deaths = OBS_VALUE) |&gt; \n  select(date, deaths)\n\nRows: 20819 Columns: 18\n── Column specification ────────────────────────────────────────────────────────\nDelimiter: \",\"\nchr  (12): STRUCTURE, STRUCTURE_ID, STRUCTURE_NAME, ACTION, Ereignisart, Kan...\ndbl   (3): BEVNAT_EVENT, CANTON, OBS_VALUE\nlgl   (2): Jahr, Monat, Tag, Beobachtungswert\ndate  (1): TIME_PERIOD\n\nℹ Use `spec()` to retrieve the full column specification for this data.\nℹ Specify the column types or set `show_col_types = FALSE` to quiet this message.\n\n# duplicates? no\ndea_imp |&gt; \n  count(date) |&gt; \n  filter(n == max(n))\n\n# A tibble: 20,819 × 2\n   date           n\n   &lt;date&gt;     &lt;int&gt;\n 1 1969-01-01     1\n 2 1969-01-02     1\n 3 1969-01-03     1\n 4 1969-01-04     1\n 5 1969-01-05     1\n 6 1969-01-06     1\n 7 1969-01-07     1\n 8 1969-01-08     1\n 9 1969-01-09     1\n10 1969-01-10     1\n# ℹ 20,809 more rows\n\n# deaths for all days from May to September\ndea &lt;- tibble(date = seq(min(dea_imp$date), max(dea_imp$date), by = \"day\")) |&gt; \n  left_join(dea_imp, by = \"date\") |&gt; \n  mutate(deaths = replace_na(deaths, 0),\n         month = month(date)) |&gt;\n  filter(month &gt;= 5, month &lt;= 9) |&gt;\n  select(date, month, deaths)\n\nFirst plot of FSO death data\n\n\n\n\n\n\n\n\nFigure 1.1: deaths per day (FSO)\n\n\n\n\n\n\n\n1.2.2 Deaths: Zurich\n\n# import deaths\ndea_imp_zh &lt;- read_csv(path_death_zh) |&gt; \n    mutate(date = as.Date(GueltigAbDat)) |&gt; \n    group_by(date) |&gt;\n    summarise(deaths = sum(AnzSterWir, na.rm = TRUE), .groups = \"drop\")\n\nRows: 93444 Columns: 17\n── Column specification ────────────────────────────────────────────────────────\nDelimiter: \",\"\nchr (8): SexLang, AlterV20Kurz, HerkunftLang, KreisLang, QuarCd, QuarLang, D...\ndbl (9): GueltigAbDatJahr, GueltigAbDatMM, GueltigAbDatDD, GueltigAbDat, Sex...\n\nℹ Use `spec()` to retrieve the full column specification for this data.\nℹ Specify the column types or set `show_col_types = FALSE` to quiet this message.\n\n# duplicates? no\ndea_imp_zh |&gt; \n  count(date) |&gt; \n  filter(n == max(n))\n\n# A tibble: 10,345 × 2\n   date           n\n   &lt;date&gt;     &lt;int&gt;\n 1 2008-01-02     1\n 2 2008-01-03     1\n 3 2008-01-04     1\n 4 2008-01-05     1\n 5 2008-01-06     1\n 6 2008-01-07     1\n 7 2008-01-08     1\n 8 2008-01-09     1\n 9 2008-01-10     1\n10 2008-01-11     1\n# ℹ 10,335 more rows\n\n# deaths for all days from May to September\ndea_zh &lt;- tibble(date = seq(min(dea_imp_zh$date), max(dea_imp_zh$date), by = \"day\")) |&gt; \n  left_join(dea_imp_zh, by = \"date\") |&gt; \n  mutate(deaths = replace_na(deaths, 0),\n         month = month(date)) |&gt;\n  filter(month &gt;= 5, month &lt;= 9) |&gt;\n  select(date, month, deaths)\n\n\n\n\n\n\n\n\n\nFigure 1.2: deaths per day (Zurich)\n\n\n\n\n\n\n\n1.2.3 Temperature\n\n# import mean daily temperature\ntem &lt;- read_delim(path_temp, delim = \";\") |&gt;\n  mutate(date = as.Date(reference_timestamp, format = \"%d.%m.%Y %H:%M\")) |&gt;\n  rename(temp = ths200d0) |&gt;\n  select(date, temp)\n\nRows: 59170 Columns: 8\n── Column specification ────────────────────────────────────────────────────────\nDelimiter: \";\"\nchr (2): station_abbr, reference_timestamp\ndbl (6): ths200dn, ths200dx, ths200d0, th9120dv, th91dndv, th91dxdv\n\nℹ Use `spec()` to retrieve the full column specification for this data.\nℹ Specify the column types or set `show_col_types = FALSE` to quiet this message.\n\n# checks\ntem |&gt;\n  mutate(diff = c(1, diff(date))) |&gt;\n  summarize(min_date_diff = min(diff),\n            max_date_diff = max(diff),\n            temp_NA = sum(is.na(temp)))\n\n# A tibble: 1 × 3\n  min_date_diff max_date_diff temp_NA\n          &lt;dbl&gt;         &lt;dbl&gt;   &lt;int&gt;\n1             1             1       0\n\n\nFirst plot for temperature data\n\n\n\n\n\n\n\n\nFigure 1.3: mean temperature per day\n\n\n\n\n\n\n\n1.2.4 FSO-Death and temperature combined\n\n# data is limited by death values available\nrange(dea$date)\n\n[1] \"1969-05-01\" \"2025-09-30\"\n\nrange(tem$date)\n\n[1] \"1864-01-01\" \"2025-12-31\"\n\n# imported data\ntotal &lt;- dea |&gt;\n  left_join(tem, by = \"date\")\n\n# check\nnrow(dea)\n\n[1] 8721\n\nnrow(total)\n\n[1] 8721",
+    "crumbs": [
+      "<span class='chapter-number'>1</span>  <span class='chapter-title'>Heat-Related Mortality</span>"
+    ]
+  },
+  {
+    "objectID": "mortality.html#analysis",
+    "href": "mortality.html#analysis",
+    "title": "1  Heat-Related Mortality",
+    "section": "1.3 Analysis",
+    "text": "1.3 Analysis\n\n1.3.1 Relative risk (RR)\nRelative risk estimation with FSO death data.\n\n# years (only if ten years with past data available)\nyears &lt;- (year(min(total$date))+9) : year(max(total$date))\n\n# data: relative risk\nRR_dat &lt;- map_dfr(years, function(y) {\n  RR_fun(\n    date = total$date,\n    temp = total$temp,\n    death = total$deaths,\n    year_eval = y\n  )\n})\n\n\n\n1.3.2 Exposure-response relationship\nExposure-response relationship with FSO death data.\n\n\n\n\n\n\n\n\nFigure 1.4: exposure-response relationship\n\n\n\n\n\n\n\n1.3.3 Attributable fraction\nAttributable fraction with FSO death data.\n\nAF &lt;- RR_dat |&gt;\n  filter(year_pred == 1) |&gt;\n  mutate(AF = pmax(0, if_else(temp &gt; MMT, (RR - 1) / RR, 0)),\n         AF_low = pmax(0, if_else(temp &gt; MMT, (RR_low - 1) / RR_low, 0)),\n         AF_high = pmax(0, if_else(temp &gt; MMT, (RR_high - 1) / RR_high, 0)))\n\nCumulative distribution of the attributable fraction\n\n\n\n\n\n\n\n\nFigure 1.5: Cumulative distribution of attributable fraction\n\n\n\n\n\n\n\n\n\n\n\n\n\nFigure 1.6: Cumulative distribution of attributable fraction by period\n\n\n\n\n\n\n\n1.3.4 Attributable deaths\nAttributable deaths with Zurich death data.\nZurich death data begins later than the estimated AF; therefore, right join on Zurich death data.\n\nAD &lt;- AF |&gt; \n  select(year, date, temp, MMT, RR, RR_low, RR_high, period, \n         AF, AF_low, AF_high) |&gt; \n  right_join(dea_zh, by = \"date\") |&gt; \n  mutate(AD = AF * deaths,\n         AD_low = AF_low * deaths,\n         AD_high = AF_high * deaths) |&gt; \n  filter(year &lt;= last_year)",
+    "crumbs": [
+      "<span class='chapter-number'>1</span>  <span class='chapter-title'>Heat-Related Mortality</span>"
+    ]
+  },
+  {
+    "objectID": "mortality.html#results",
+    "href": "mortality.html#results",
+    "title": "1  Heat-Related Mortality",
+    "section": "1.4 Results",
+    "text": "1.4 Results\n\n1.4.1 Heat-related mortality by year\nHeat-related mortality in the city of Zurich by year.\n\n\n\n\n\n\n\n\nFigure 1.7: heat-related mortality by year\n\n\n\n\n\n\n\n1.4.2 Proportion of heat related deaths (summer months)\nProportion of heat related deaths from May to September per year (city of Zurich).\n\n\n\n\n\n\n\n\nFigure 1.8: attributable fraction by year\n\n\n\n\n\n\n\n1.4.3 Proportion of heat related deaths (entire year)\n\n\n\n\n\n\n\n\nFigure 1.9: proportion of heat related deaths (entire year)\n\n\n\n\n\n\n\n1.4.4 heat-related mortality by year and heat intensity\nIn the city of Zurich.\n\n\n\n\n\n\n\n\nFigure 1.10: heat-related mortality by year and heat intensity\n\n\n\n\n\n\n\n1.4.5 selected years (daily values)\n\n\n\n\n\n\n\n\nFigure 1.11: selected years (daily values)\n\n\n\n\n\n\n\n1.4.6 MMT by year\n\n\n\n\n\n\n\n\nFigure 1.12: minimum mortality temperature (MMT) by year\n\n\n\n\n\n…",
+    "crumbs": [
+      "<span class='chapter-number'>1</span>  <span class='chapter-title'>Heat-Related Mortality</span>"
+    ]
+  }
+]
