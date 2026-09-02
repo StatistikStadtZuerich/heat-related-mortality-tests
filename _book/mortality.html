@@ -375,11 +375,11 @@ Figure&nbsp;1.1: deaths per day (FSO)
 <div class="cell">
 <div class="sourceCode cell-code" id="cb11"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a><span class="co"># import deaths</span></span>
 <span id="cb11-2"><a href="#cb11-2" aria-hidden="true" tabindex="-1"></a>dea_imp_zh <span class="ot">&lt;-</span> <span class="fu">read_csv</span>(path_death_zh) <span class="sc">|&gt;</span> </span>
-<span id="cb11-3"><a href="#cb11-3" aria-hidden="true" tabindex="-1"></a>    <span class="fu">mutate</span>(<span class="at">date =</span> <span class="fu">as.Date</span>(GueltigAbDat)) <span class="sc">|&gt;</span> </span>
+<span id="cb11-3"><a href="#cb11-3" aria-hidden="true" tabindex="-1"></a>    <span class="fu">mutate</span>(<span class="at">date =</span> <span class="fu">as.Date</span>(<span class="fu">paste0</span>(GueltigAbDatJahr, <span class="st">"-"</span>, GueltigAbDatMM, <span class="st">"-"</span>, GueltigAbDatDD))) <span class="sc">|&gt;</span> </span>
 <span id="cb11-4"><a href="#cb11-4" aria-hidden="true" tabindex="-1"></a>    <span class="fu">group_by</span>(date) <span class="sc">|&gt;</span></span>
 <span id="cb11-5"><a href="#cb11-5" aria-hidden="true" tabindex="-1"></a>    <span class="fu">summarise</span>(<span class="at">deaths =</span> <span class="fu">sum</span>(AnzSterWir, <span class="at">na.rm =</span> <span class="cn">TRUE</span>), <span class="at">.groups =</span> <span class="st">"drop"</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 <div class="cell-output cell-output-stderr">
-<pre><code>Rows: 93444 Columns: 17
+<pre><code>Rows: 93892 Columns: 17
 ── Column specification ────────────────────────────────────────────────────────
 Delimiter: ","
 chr (8): SexLang, AlterV20Kurz, HerkunftLang, KreisLang, QuarCd, QuarLang, D...
@@ -393,20 +393,20 @@ dbl (9): GueltigAbDatJahr, GueltigAbDatMM, GueltigAbDatDD, GueltigAbDat, Sex...
 <span id="cb13-3"><a href="#cb13-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">count</span>(date) <span class="sc">|&gt;</span> </span>
 <span id="cb13-4"><a href="#cb13-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(n <span class="sc">==</span> <span class="fu">max</span>(n))</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 <div class="cell-output cell-output-stdout">
-<pre><code># A tibble: 10,345 × 2
+<pre><code># A tibble: 10,406 × 2
    date           n
    &lt;date&gt;     &lt;int&gt;
- 1 2008-01-02     1
- 2 2008-01-03     1
- 3 2008-01-04     1
- 4 2008-01-05     1
- 5 2008-01-06     1
- 6 2008-01-07     1
- 7 2008-01-08     1
- 8 2008-01-09     1
- 9 2008-01-10     1
-10 2008-01-11     1
-# ℹ 10,335 more rows</code></pre>
+ 1 1998-01-01     1
+ 2 1998-01-02     1
+ 3 1998-01-03     1
+ 4 1998-01-04     1
+ 5 1998-01-05     1
+ 6 1998-01-06     1
+ 7 1998-01-07     1
+ 8 1998-01-08     1
+ 9 1998-01-09     1
+10 1998-01-10     1
+# ℹ 10,396 more rows</code></pre>
 </div>
 <div class="sourceCode cell-code" id="cb15"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb15-1"><a href="#cb15-1" aria-hidden="true" tabindex="-1"></a><span class="co"># deaths for all days from May to September</span></span>
 <span id="cb15-2"><a href="#cb15-2" aria-hidden="true" tabindex="-1"></a>dea_zh <span class="ot">&lt;-</span> <span class="fu">tibble</span>(<span class="at">date =</span> <span class="fu">seq</span>(<span class="fu">min</span>(dea_imp_zh<span class="sc">$</span>date), <span class="fu">max</span>(dea_imp_zh<span class="sc">$</span>date), <span class="at">by =</span> <span class="st">"day"</span>)) <span class="sc">|&gt;</span> </span>
@@ -520,7 +520,7 @@ Figure&nbsp;1.3: mean temperature per day
 <span id="cb28-6"><a href="#cb28-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">RR_fun</span>(</span>
 <span id="cb28-7"><a href="#cb28-7" aria-hidden="true" tabindex="-1"></a>    <span class="at">date =</span> total<span class="sc">$</span>date,</span>
 <span id="cb28-8"><a href="#cb28-8" aria-hidden="true" tabindex="-1"></a>    <span class="at">temp =</span> total<span class="sc">$</span>temp,</span>
-<span id="cb28-9"><a href="#cb28-9" aria-hidden="true" tabindex="-1"></a>    <span class="at">death =</span> total<span class="sc">$</span>deaths,</span>
+<span id="cb28-9"><a href="#cb28-9" aria-hidden="true" tabindex="-1"></a>    <span class="at">deaths =</span> total<span class="sc">$</span>deaths,</span>
 <span id="cb28-10"><a href="#cb28-10" aria-hidden="true" tabindex="-1"></a>    <span class="at">year_eval =</span> y</span>
 <span id="cb28-11"><a href="#cb28-11" aria-hidden="true" tabindex="-1"></a>  )</span>
 <span id="cb28-12"><a href="#cb28-12" aria-hidden="true" tabindex="-1"></a>})</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>

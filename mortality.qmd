@@ -180,7 +180,7 @@ dea |>
 
 # import deaths
 dea_imp_zh <- read_csv(path_death_zh) |> 
-    mutate(date = as.Date(GueltigAbDat)) |> 
+    mutate(date = as.Date(paste0(GueltigAbDatJahr, "-", GueltigAbDatMM, "-", GueltigAbDatDD))) |> 
     group_by(date) |>
     summarise(deaths = sum(AnzSterWir, na.rm = TRUE), .groups = "drop")
 
@@ -299,7 +299,7 @@ RR_dat <- map_dfr(years, function(y) {
   RR_fun(
     date = total$date,
     temp = total$temp,
-    death = total$deaths,
+    deaths = total$deaths,
     year_eval = y
   )
 })
@@ -439,8 +439,8 @@ ggplot(mort_y) +
   geom_errorbar(aes(x = factor(year), ymin = AD_low, ymax = AD_high),
                 width = 0.2, col = "grey40") +
   labs(x = "year", y = "heat-related deaths per year") +
-  theme_minimal()
-
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5))
 
 ```
 
@@ -467,7 +467,8 @@ ggplot(prop_y_summer) +
   geom_errorbar(aes(x = factor(year), ymin = percent_low, ymax = percent_high),
                 width = 0.2, col = "grey40") +
   labs(x = "year", y = "proportion of heat-related deaths (in %)") +
-  theme_minimal()
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5))
 
 
 ```
@@ -498,7 +499,8 @@ ggplot(prop_y) +
   geom_errorbar(aes(x = factor(year), ymin = percent_low, ymax = percent_high),
                 width = 0.2, col = "grey40") +
   labs(x = "year", y = "proportion of heat-related deaths (in %)") +
-  theme_minimal()
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5))
 
 
 ```
@@ -544,7 +546,8 @@ ggplot() +
                 width = 0.2, col = "grey40") +
   scale_fill_manual(values = qual12[c(5, 11, 12)]) +
   labs(x = "year", y = "heat-related deaths per year", fill = "") +
-  theme_minimal()
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5))
 
 
 
@@ -607,7 +610,8 @@ MMT_y <- AD |>
 ggplot(MMT_y) +
   geom_col(aes(x = factor(year), y = MMT), fill = qual12[1]) +
   labs(x = "year", y = "minimum mortality temperature") +
-  theme_minimal()
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5))
 
 
 ```
